@@ -3,13 +3,11 @@
 import matplotlib as mpl 
 import matplotlib.pyplot as plt 
 import numpy as np
-import os
 import pandas as pd
-import tarfile
 import warnings
+from housing_data import load_housing_data
 from pandas.plotting import scatter_matrix
 from scipy.stats import randint
-from six.moves import urllib
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
@@ -29,6 +27,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeRegressor
 from utils import lnprintln, println
 
+"""Initial setup"""
+
 seed = 42
 np.random.seed(seed)
 
@@ -39,43 +39,30 @@ mpl.rc('ytick', labelsize=12)
 # see https://github.com/scipy/scipy/issues/5998
 warnings.filterwarnings(action='ignore', message='^internal gelsd')
 
-download_root = 'https://raw.githubusercontent.com/ageron/handson-ml/master/'
-housing_path = os.path.join('datasets', 'housing')
-housing_url = download_root + 'datasets/housing/housing.tgz'
+housing = load_housing_data()
 
-def fetch_housing_data(housing_url, housing_path):
-    os.makedirs(housing_path, exist_ok=True)
-    tgz_path = os.path.join(housing_path, 'housing.tgz')
-    urllib.request.urlretrieve(housing_url, tgz_path)
-    housing_tgz = tarfile.open(tgz_path)
-    housing_tgz.extractall(path=housing_path)
-    housing_tgz.close()
+"""Knowing data"""
 
-fetch_housing_data(housing_url, housing_path)
-
-def load_housing_data(housing_path):
-    csv_path = os.path.join(housing_path, 'housing.csv')
-    return pd.read_csv(csv_path)
-
-housing = load_housing_data(housing_path)
-(housing.head())
+println(housing.head())
 
 sample = housing.sample(n = 10, random_state = seed)
 println(sample)
 
 housing.info()
 
-lnprintln(housing['ocean_proximity'].value_counts())
+ocean_vcounts = housing['ocean_proximity'].value_counts()
+lnprintln()
 
 println(housing.describe())
 
-#housing.hist(bins=50, figsize=(20,15)) TODO
-#plt.show() TODO
+housing.hist(bins=50, figsize=(20,15))
+plt.show()
 
 train_set, test_set = train_test_split(
     housing, test_size=0.2, random_state=seed)
 
-println(housing['median_income'].describe())
+income = housing['median_income'].describe()
+println(income)
 
 mean = np.mean(housing['median_income'])
 std = np.std(housing['median_income'])
@@ -83,22 +70,26 @@ std = np.std(housing['median_income'])
 housing['income_cat'] = pd.cut(
     housing['median_income'], 
     bins=[0., 1.5, 3.0, 4.5, 6., np.inf], 
-    labels=[1, 2, 3, 4, 5]
-)
+    labels=[1, 2, 3, 4, 5])
 
-#hist = housing['income_cat'].hist() TODO
-#plt.show() TODO
+hist = housing['income_cat'].hist()
+plt.show()
 
-println(housing['income_cat'].value_counts())
+vcounts = housing['income_cat'].value_counts()
+println(vcounts)
 
 split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=seed)
+
+"""Splitting data"""
 
 for train_index, test_index in split.split(housing, housing['income_cat']):
     strat_train_set = housing.loc[train_index]
     strat_test_set = housing.loc[test_index]
 
-println(strat_test_set['income_cat'].value_counts() / len(strat_test_set))
-println(housing['income_cat'].value_counts() / len(housing))
+strat_vcounts = strat_test_set['income_cat'].value_counts() / len(strat_test_set)
+println(strat_vcounts)
+income_vcounts = housing['income_cat'].value_counts() / len(housing)
+println(income_vcounts)
 
 def income_cat_proportions(data): 
     return data['income_cat'].value_counts() / len(data)
@@ -106,70 +97,73 @@ def income_cat_proportions(data):
 train_set, test_set = train_test_split(housing, test_size=0.2, random_state=seed)
 
 compare_props = pd.DataFrame({
-    'Geral': income_cat_proportions(housing),
-    'Estratificado': income_cat_proportions(strat_test_set),
-    'Aleatorio': income_cat_proportions(test_set),
+    'general': income_cat_proportions(housing),
+    'stratified': income_cat_proportions(strat_test_set),
+    'random': income_cat_proportions(test_set),
 }).sort_index()
 
-compare_props['Aleatório %erro'] = (
-    100 * compare_props['Aleatorio'] / compare_props['Geral'] - 100)
-compare_props['Estratificado %erro'] = (
-    100 * compare_props['Estratificado'] / compare_props['Geral'] - 100)
+compare_props['random %error'] = (
+    100 * compare_props['random'] / compare_props['general'] - 100)
+compare_props['stratified %error'] = (
+    100 * compare_props['stratified'] / compare_props['general'] - 100)
 
 println(compare_props)
 
 for set_ in (strat_train_set, strat_test_set):
     set_.drop('income_cat', axis=1, inplace=True)
 
+"""Visualizing data"""
+
 housing = strat_train_set.copy()
-# housing.plot(kind='scatter', x='longitude', y='latitude') TODO
-# plt.show() TODO
+housing.plot(kind='scatter', x='longitude', y='latitude')
+plt.show()
 
-#housing.plot(kind='scatter', x='longitude', y='latitude', alpha=0.1) TODO
-#plt.show() TODO
+housing.plot(kind='scatter', x='longitude', y='latitude', alpha=0.1)
+plt.show() 
 
-# housing.plot(
-#     kind='scatter', x='longitude', 
-#     y='latitude', alpha=0.4,
-#     s=housing['population']/100, label='population', 
-#     figsize=(10,7), c='median_house_value', 
-#     cmap=plt.get_cmap('jet'), colorbar=True,
-#     sharex=False # see https://github.com/pandas-dev/pandas/issues/10611
-# ) TODO
-# plt.legend() TODO
-# plt.show() TODO
+housing.plot(
+    kind='scatter', x='longitude', 
+    y='latitude', alpha=0.4,
+    s=housing['population']/100, label='population', 
+    figsize=(10,7), c='median_house_value', 
+    cmap=plt.get_cmap('jet'), colorbar=True,
+    sharex=False) # see https://github.com/pandas-dev/pandas/issues/10611
+plt.legend()
+plt.show()
 
 corr_matrix = housing.corr()
 println(corr_matrix)
 
-println(corr_matrix['median_house_value'].sort_values(ascending=False))
+svalues = corr_matrix['median_house_value'].sort_values(ascending=False)
+println(svalues)
 
 attributes = [
     'median_house_value', 'median_income', 
     'total_rooms', 'housing_median_age'
 ]
-# scatter_matrix(housing[attributes], figsize=(12, 8))
-# plt.show()
+scatter_matrix(housing[attributes], figsize=(12, 8))
+plt.show()
 
-# housing.plot(kind='scatter', x='median_income', y='median_house_value', alpha=0.1)
-# plt.axis([0, 16, 0, 550000])
-# plt.show()
+housing.plot(kind='scatter', x='median_income', y='median_house_value', alpha=0.1)
+plt.axis([0, 16, 0, 550000])
+plt.show()
 
-# Número de cômodos por familia (média)
+"""Feature engineering"""
+
 housing['rooms_per_household'] = housing['total_rooms']/housing['households']
-# quartos/cômodos
 housing['bedrooms_per_room'] = housing['total_bedrooms']/housing['total_rooms']
-# população/agregado familiar
 housing['population_per_household']= housing['population']/housing['households']
 
 corr_matrix = housing.corr()
 corr_matrix['median_house_value'].sort_values(ascending=False)
 
-# housing.plot(kind='scatter', x='rooms_per_household', y='median_house_value', alpha=0.2)
-# plt.axis([0, 5, 0, 520000])
-# plt.show()
+housing.plot(kind='scatter', x='rooms_per_household', y='median_house_value', alpha=0.2)
+plt.axis([0, 5, 0, 520000])
+plt.show()
 
 println(housing.describe())
+
+"""Preparing data"""
 
 housing = strat_train_set.drop('median_house_value', axis=1)
 housing_labels = strat_train_set['median_house_value'].copy()
@@ -220,8 +214,7 @@ cat_encoder = OneHotEncoder(sparse=False)
 housing_cat_1hot = cat_encoder.fit_transform(housing_cat)
 housing_cat_1hot
 
-cat_encoder.categories_
-
+println(cat_encoder.categories_)
 println(housing.columns)
 
 def add_extra_features(X, add_bedrooms_per_room=True):
@@ -250,8 +243,7 @@ println(housing_extra_attribs.head())
 num_pipeline = Pipeline([
     ('imputer', SimpleImputer(strategy='median')),
     ('attribs_adder', FunctionTransformer(add_extra_features, validate=False)),
-    ('std_scaler', StandardScaler())
-])
+    ('std_scaler', StandardScaler())])
 
 housing_num_tr = num_pipeline.fit_transform(housing_num)
 println(housing_num_tr)
@@ -261,12 +253,13 @@ cat_attribs = ['ocean_proximity']
 
 full_pipeline = ColumnTransformer([
     ('num', num_pipeline, num_attribs), 
-    ('cat', OneHotEncoder(), cat_attribs)
-]) 
+    ('cat', OneHotEncoder(), cat_attribs)]) 
 
 housing_prepared = full_pipeline.fit_transform(housing)
 println(housing_prepared)
 println(housing_prepared.shape)
+
+"""Select and trains models"""
 
 lin_reg = LinearRegression()
 lin_reg.fit(housing_prepared, housing_labels) 
@@ -295,7 +288,11 @@ tree_mse = MSE(housing_labels, housing_predictions)
 tree_rmse = np.sqrt(tree_mse)
 println(tree_rmse)
 
-scores = cross_val_score(tree_reg, housing_prepared, housing_labels, scoring='neg_mean_squared_error', cv=10) 
+"""Evaluating models"""
+
+scores = cross_val_score(
+    tree_reg, housing_prepared, housing_labels, 
+    scoring='neg_mean_squared_error', cv=10) 
 
 tree_rmse_scores = np.sqrt(-scores)
 
@@ -309,8 +306,7 @@ display_scores(tree_rmse_scores)
 
 lin_scores = cross_val_score(
     lin_reg, housing_prepared, housing_labels, 
-    scoring='neg_mean_squared_error', cv=10
-)
+    scoring='neg_mean_squared_error', cv=10)
 lin_rmse_scores = np.sqrt(-lin_scores)
 display_scores(lin_rmse_scores)
 
@@ -324,8 +320,7 @@ println(forest_rmse)
 
 forest_scores = cross_val_score(
     forest_reg, housing_prepared, housing_labels, 
-    scoring='neg_mean_squared_error', cv=10
-)
+    scoring='neg_mean_squared_error', cv=10)
 forest_rmse_scores = np.sqrt(-forest_scores)
 display_scores(forest_rmse_scores)
 
@@ -336,10 +331,11 @@ param_grid = [
 
 forest_reg = RandomForestRegressor(random_state=seed)
 
+"""Adjusting and selecting model"""
+
 grid_search = GridSearchCV(
     forest_reg, param_grid, cv=5, 
-    scoring='neg_mean_squared_error', return_train_score=True
-)
+    scoring='neg_mean_squared_error', return_train_score=True)
 grid_search.fit(housing_prepared, housing_labels)
 println(grid_search.best_params_)
 println(grid_search.best_estimator_)
@@ -360,8 +356,7 @@ forest_reg = RandomForestRegressor(random_state=seed)
 rnd_search = RandomizedSearchCV(
     forest_reg, param_distributions=param_distribs, 
     n_iter=10, cv=5, 
-    scoring='neg_mean_squared_error', random_state=seed
-)
+    scoring='neg_mean_squared_error', random_state=seed)
 rnd_search.fit(housing_prepared, housing_labels)
 
 cvres = rnd_search.cv_results_
@@ -378,6 +373,9 @@ cat_one_hot_attribs = list(cat_encoder.categories_[0])
 attributes = num_attribs + extra_attribs + cat_one_hot_attribs
 sorted_attributes = sorted(zip(feature_importances, attributes), reverse=True)
 println(sorted_attributes)
+
+"""Final model"""
+
 final_model = grid_search.best_estimator_
 
 X_test = strat_test_set.drop('median_house_value', axis=1)
